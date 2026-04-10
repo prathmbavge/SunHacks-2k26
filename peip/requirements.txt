@@ -1,0 +1,9 @@
+pydriller
+fastapi
+uvicorn
+openai
+python-dotenv
+supabase
+pandas
+radon
+requests
