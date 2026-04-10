@@ -42,7 +42,34 @@ class AnalyzeRequest(BaseModel):
 def analyze_repo(req: AnalyzeRequest):
     try:
         res = run_full_pipeline(req.repo_url)
-        return res
+        if res.get("status") == "Error":
+            return res
+            
+        repo_id = res.get("repo_id")
+        overall = res.get("overall_health_score")
+        
+        if not supabase:
+            # Return mocked payload if Env vars missing
+            return {
+                "status": "Success",
+                "repo": {"overall_health_score": overall, "language": "Mocked", "star_count": 0, "contributor_count": 0},
+                "modules": [{"file_path": "src/demo.py", "risk_classification": "High", "health_score": 40, "churn_count": 15, "complexity_score": 12}],
+                "reports": [{"report_type": "developer", "content": "## Mocked\n- Need Supabase keys"}, {"report_type": "ceo", "content": "## Mocked\n- Missing DB config"}]
+            }
+            
+        # Hydrate via the flattened schema
+        repo_data = supabase.table('repositories').select('*').eq('id', repo_id).execute()
+        repo_obj = repo_data.data[0] if repo_data.data else {"overall_health_score": overall}
+        
+        modules_data = supabase.table('module_scores').select('*').eq('repo_id', repo_id).execute()
+        reports_data = supabase.table('reports').select('*').eq('repo_id', repo_id).execute()
+        
+        return {
+            "status": "Success",
+            "repo": repo_obj,
+            "modules": modules_data.data,
+            "reports": reports_data.data
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
