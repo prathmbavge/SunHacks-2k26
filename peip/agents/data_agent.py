@@ -15,8 +15,13 @@ def run_data_agent(repo_url: str, out_dir: str):
     owner, repo_name = parse_github_url(repo_url)
     repo_path = os.path.join(out_dir, repo_name)
     
-    # Clone the repository
-    if not os.path.exists(repo_path):
+    # Ensure fresh code by pulling if exists, otherwise cloning
+    if os.path.exists(repo_path):
+        print(f"[DataAgent] Repo exists at {repo_path}, pulling latest...")
+        result = subprocess.run(['git', 'pull'], cwd=repo_path, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"[DataAgent] Git pull failed, proceeding with local copy: {result.stderr}")
+    else:
         print(f"[DataAgent] Cloning repo into {repo_path}")
         result = subprocess.run(['git', 'clone', repo_url, repo_path], capture_output=True, text=True)
         if result.returncode != 0:
@@ -30,13 +35,16 @@ def run_data_agent(repo_url: str, out_dir: str):
     repo_data = {}
     contributors = []
     
-    resp = requests.get(api_url, headers=headers)
-    if resp.status_code == 200:
-        repo_data = resp.json()
-        contrib_resp = requests.get(f"{api_url}/contributors", headers=headers)
-        contributors = contrib_resp.json() if contrib_resp.status_code == 200 else []
-    else:
-        print(f"[DataAgent] Warning: GitHub API returned {resp.status_code}. Mocking metadata.")
+    try:
+        resp = requests.get(api_url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            repo_data = resp.json()
+            contrib_resp = requests.get(f"{api_url}/contributors", headers=headers, timeout=10)
+            contributors = contrib_resp.json() if contrib_resp.status_code == 200 else []
+        else:
+            print(f"[DataAgent] Warning: GitHub API returned {resp.status_code}. Mocking metadata.")
+    except Exception as e:
+        print(f"[DataAgent] Network Error targeting GitHub API: {e}. Mocking metadata.")
     
     meta = {
         "repo_name": repo_name,

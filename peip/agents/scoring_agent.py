@@ -42,17 +42,32 @@ def run_scoring_agent(risk_json: str, repo_url: str):
         with open(repo_meta_path, 'r') as mf:
             meta_info = json.load(mf)
             
-    # Store in Supabase
-    repo_res = supabase.table('repositories').insert({
-        'repo_url': repo_url,
-        'repo_name': repo_name,
-        'overall_health_score': overall_health,
-        'language': meta_info.get('language'),
-        'star_count': meta_info.get('star_count'),
-        'contributor_count': meta_info.get('contributor_count')
-    }).execute()
+    # Deduplicate logic: check if repo exists
+    existing = supabase.table('repositories').select('id').eq('repo_url', repo_url).execute()
     
-    repo_id = repo_res.data[0]['id']
+    if existing.data:
+        repo_id = existing.data[0]['id']
+        print(f"[ScoringAgent] Existing repo {repo_id} found. Purging old sub-tables and updating...")
+        supabase.table('repositories').update({
+            'overall_health_score': overall_health,
+            'language': meta_info.get('language'),
+            'star_count': meta_info.get('star_count'),
+            'contributor_count': meta_info.get('contributor_count')
+        }).eq('id', repo_id).execute()
+        
+        # Manually clear to prevent orphaned data ghosts
+        supabase.table('module_scores').delete().eq('repo_id', repo_id).execute()
+        supabase.table('reports').delete().eq('repo_id', repo_id).execute()
+    else:
+        repo_res = supabase.table('repositories').insert({
+            'repo_url': repo_url,
+            'repo_name': repo_name,
+            'overall_health_score': overall_health,
+            'language': meta_info.get('language'),
+            'star_count': meta_info.get('star_count'),
+            'contributor_count': meta_info.get('contributor_count')
+        }).execute()
+        repo_id = repo_res.data[0]['id']
     
     for filepath, metrics in data.items():
         supabase.table('module_scores').insert({
