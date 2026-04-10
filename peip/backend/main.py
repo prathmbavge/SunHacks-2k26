@@ -25,7 +25,7 @@ app.add_middleware(
 )
 
 url = os.environ.get("SUPABASE_URL", "")
-key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+key = os.environ.get("SUPABASE_KEY", "")
 
 supabase = None
 if url and key and "your_supabase" not in url:

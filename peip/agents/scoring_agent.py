@@ -36,32 +36,34 @@ def run_scoring_agent(risk_json: str, repo_url: str):
         
     overall_health = int(total_score / total_weight) if total_weight > 0 else 100
     
+    repo_meta_path = os.path.join(os.path.dirname(risk_json), 'repo_meta.json')
+    meta_info = {}
+    if os.path.exists(repo_meta_path):
+        with open(repo_meta_path, 'r') as mf:
+            meta_info = json.load(mf)
+            
     # Store in Supabase
     repo_res = supabase.table('repositories').insert({
         'repo_url': repo_url,
         'repo_name': repo_name,
-        'overall_health_score': overall_health
+        'overall_health_score': overall_health,
+        'language': meta_info.get('language'),
+        'star_count': meta_info.get('star_count'),
+        'contributor_count': meta_info.get('contributor_count')
     }).execute()
     
     repo_id = repo_res.data[0]['id']
     
     for filepath, metrics in data.items():
-        # First create the module
-        mod_res = supabase.table('modules').insert({
+        supabase.table('module_scores').insert({
             'repo_id': repo_id,
             'file_path': filepath,
+            'health_score': final_scores[filepath],
+            'risk_classification': metrics['risk_classification'],
             'churn_count': metrics['raw_metrics']['churn'],
             'complexity_score': metrics['raw_metrics']['cyclomatic_complexity'],
             'radon_mi_score': metrics['raw_metrics']['maintainability_index'],
             'unique_authors': metrics['raw_metrics']['unique_authors']
-        }).execute()
-        mod_id = mod_res.data[0]['id']
-        
-        # Then the risk score link
-        supabase.table('risk_scores').insert({
-            'module_id': mod_id,
-            'risk_classification': metrics['risk_classification'],
-            'health_score': final_scores[filepath]
         }).execute()
         
     with open(os.path.join(os.path.dirname(risk_json), 'final_scores.json'), 'w') as f:

@@ -71,8 +71,13 @@ def run_report_agent(repo_id: str, risk_json_path: str):
     with open(risk_json_path, 'r') as f:
         data = json.load(f)
         
-    dev_rep = generate_developer_report(json.dumps(data)[:3000], "Target Repo")
-    ceo_rep = generate_ceo_report(json.dumps(data)[:3000], "Target Repo")
+    # Sort modules by risk score (descending) and take top 15 to ensure valid JSON payload within token limits
+    sorted_items = sorted(data.items(), key=lambda x: x[1]['risk_score'], reverse=True)
+    top_risks = dict(sorted_items[:15])
+    clean_json_payload = json.dumps(top_risks, indent=2)
+        
+    dev_rep = generate_developer_report(clean_json_payload, "Target Repo")
+    ceo_rep = generate_ceo_report(clean_json_payload, "Target Repo")
     
     supabase.table('reports').insert({'repo_id': repo_id, 'report_type': 'developer', 'content': dev_rep}).execute()
     supabase.table('reports').insert({'repo_id': repo_id, 'report_type': 'ceo', 'content': ceo_rep}).execute()

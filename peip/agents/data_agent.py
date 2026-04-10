@@ -27,17 +27,16 @@ def run_data_agent(repo_url: str, out_dir: str):
     headers = {"Authorization": f"Bearer {token}"} if token and "your_token_here" not in token else {}
     api_url = f"https://api.github.com/repos/{owner}/{repo_name}"
     
+    repo_data = {}
+    contributors = []
+    
     resp = requests.get(api_url, headers=headers)
-    if resp.status_code == 404:
-        raise RuntimeError("Repository not found (404).")
-    elif resp.status_code == 403:
-        raise RuntimeError("Rate limit exceeded (403).")
-    
-    repo_data = resp.json()
-    
-    # Fetch Contributors
-    contrib_resp = requests.get(f"{api_url}/contributors", headers=headers)
-    contributors = contrib_resp.json() if contrib_resp.status_code == 200 else []
+    if resp.status_code == 200:
+        repo_data = resp.json()
+        contrib_resp = requests.get(f"{api_url}/contributors", headers=headers)
+        contributors = contrib_resp.json() if contrib_resp.status_code == 200 else []
+    else:
+        print(f"[DataAgent] Warning: GitHub API returned {resp.status_code}. Mocking metadata.")
     
     meta = {
         "repo_name": repo_name,
